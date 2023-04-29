@@ -1,0 +1,337 @@
+listen port: 11123
+log_level: info
+
+devices:
+  pump1:
+    driver: reglo_icc
+    address: 127.0.0.1:12347
+    channel: 1
+  pump2:
+    driver: reglo_icc
+    address: 127.0.0.1:12347
+    channel: 2
+  pump3:
+    driver: reglo_icc
+    address: 127.0.0.1:12347
+    channel: 3
+  pump4:
+    driver: reglo_icc
+    address: 127.0.0.1:12347
+    channel: 4
+  valve1:
+    driver: azura_vu
+    address: 127.0.0.1:12345
+    command_parameters:
+      retries: 1
+      inter_command_time: .5
+      on_error: retry
+  valve2:
+    driver: azura_vu
+    address: 127.0.0.1:12344
+    command_parameters:
+      retries: 1
+      inter_command_time: .5
+      on_error: retry
+  fractioncollector:
+   driver: omnicoll
+   address: 127.0.0.2:12349
+  psu:
+    driver: tdk_lambda_zplus
+    address: 127.0.0.1:12346
+  thermostat:
+    driver: julabo_presto_a40
+    address: 127.0.0.1:12348
+  airvalve:
+    driver: airvalve
+    address: 127.0.0.1:12350
+
+experiments:
+  # Experimentname:
+  #   conditions:
+  #     name as used in commands: [ type of the condition, [ args ], { kwargs } ]
+  #   stopconditions:
+  #     - [ type of the condition, [ args ], { kwargs } ]
+  #   parameters:
+  #     name as used in commands: [ accepted datatype (see below), unit (use '' if no unit) ]
+  #     ...
+  #   observables:
+  #     - [ device, observable name, datatype (e. g. str or float), unit ]
+  #     - ...
+  #   commands:
+  #     - [ device, function, [ args ], { kwargs } ]
+  #     - [ other_experiment_inside_this_one, { keywordarguments for subexperiment } ]
+  #     - ...  
+
+  empty_dosing_tube:
+    conditions:
+
+    stopconditions:
+
+    parameters:
+
+    observables:
+      - [ pump1, remaining_time, int, s ]
+      - [ valve1, position, int, "" ]
+    commands:
+      - [ valve1, set_position, [ 6 ], { } ]
+      - [ pump1, dispense, [ ], { rate: '0.1', volume: '0.05' } ]
+
+  purge_and_temper:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+      rate: [float, mL/min]
+      volume: [float, mL]
+      temperature: [float, °C]
+    observables:
+      - [ pump2, remaining_time, int, s ]
+      - [ thermostat, current_temperature, float, °C ]
+    commands:
+      - [ thermostat, set_temperature, [ '{temperature}', 1.5, 30 ], { } ]
+      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+
+  drying:
+    conditions:
+       drying: [TimeCondition, [drying_interval, 60], {}]
+    stopconditions:
+
+    parameters:
+      
+    observables:
+    
+    commands:
+      - [ airvalve, open, [ ], { } ]
+      - [ airvalve, wait, [ drying ], { } ]
+      - [ airvalve, close, [ ], { } ]
+
+  add_component:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+      rate: [float, mL/min]
+      volume: [float, mL]
+      valve_position: [int, ""]
+    observables:
+      - [ pump1, remaining_time, int, s ]
+      - [ valve1, position, int, "" ]
+    commands:
+      - [ valve1, set_position, [ '{valve_position}' ], { } ]
+      - [ pump1, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+      - [ empty_dosing_tube, { } ]
+
+  purge:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+      rate: [float, mL/min]
+      volume: [float, mL]
+    observables:
+      - [ pump2, remaining_time, int, s ]
+    commands:
+      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+
+  prerun:
+    conditions:
+      dispense_finished_condition: [DevicesWaitingCondition, [wait_for_pump, [pump2]], {}]
+
+    stopconditions:
+
+    parameters:
+      volume: [float, mL]
+      rate: [float, mL/min]
+      current: [float, A]
+    observables:
+      - [ psu, current, float, A ]
+      - [ psu, voltage, float, V ]
+      - [ psu, amount_of_charge, float, C ]
+      - [ pump2, remaining_time, int, s ]
+    commands:
+      - [ psu, output_constant_current, [ '{current}' ], { } ]
+      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+      - [ psu, busy, [ dispense_finished_condition ] , { } ]
+      - [ pump2, wait, [ dispense_finished_condition ] , { } ]
+
+  main_continuous_electrolysis:
+    conditions:
+      
+    stopconditions:
+      - [ObservableGreaterOrEqualValueCondition, [max_voltage, psu, voltage, "{voltage_limit}"], {}]
+    parameters:
+      current: [float, A]
+      amount_of_charge: [float, C]
+      rate: [float, mL/min]
+      voltage_limit: [float, V]
+    observables:
+      - [ psu, current, float, A ]
+      - [ psu, voltage, float, V ]
+      - [ psu, amount_of_charge, float, C ]
+    commands:
+      - [ fractioncollector, next_fraction, [ ], { } ]
+      - [ pump2, continuous_flow, [ ], { rate: '{rate}' } ]
+      - [ psu, output_constant_current, [ ], { amount_of_charge: '{amount_of_charge}', current: '{current}' } ]
+
+  stop:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+
+    observables:
+
+    commands:
+      - [ pump2, stop_pumping, [ ] , { } ]
+      - [ thermostat, stop_tempering, [ ], { } ]
+      - [ fractioncollector, next_fraction, [ ], { } ]
+  
+  collect_solution:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+      rate: [float, mL/min]
+      volume: [float, mL]
+    observables:
+      - [ pump2, remaining_time, int, s ]
+    commands:
+      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+
+  main_cyclic_electrolysis:
+    conditions:
+      
+    stopconditions:
+      - [ObservableGreaterOrEqualValueCondition, [max_voltage, psu, voltage, "{voltage_limit}"], {}]
+    parameters:
+      current: [float, A]
+      amount_of_charge: [float, C]
+      rate: [float, mL/min]
+      voltage_limit: [float, V]
+    observables:
+      - [ psu, current, float, A ]
+      - [ psu, voltage, float, V ]
+      - [ psu, amount_of_charge, float, C ]
+    commands:
+      - [ pump2, continuous_flow, [ ], { rate: '{rate}' } ]
+      - [ psu, output_constant_current, [ ], { amount_of_charge: '{amount_of_charge}', current: '{current}' } ]
+
+  continuous_flow_electrolysis_biphenol:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+      purgerate: [float, mL/min]
+      purgevolume: [float, mL]
+      temperature: [float, °C]
+      acetone_purge_rate: [float, mL/min]
+      acetone_purge_volume: [float, mL]
+      hfip_purge_rate: [float, mL/min]
+      hfip_purge_volume: [float, mL]
+      phenol_rate: [float, mL/min]
+      phenol_volume: [float, mL]
+      hfip_rate: [float, mL/min]
+      half_hfip_volume: [float, mL]
+      base_rate: [float, mL/min]
+      base_volume: [float, mL]
+      fill_rate: [float, mL/min]
+      fill_volume: [float, mL]
+      prerunvolume: [float, mL]
+      flowrate: [float, mL/min]
+      current: [float, mA]
+      amount_of_charge: [float, C]
+      voltage_limit: [float, V]
+    observables:
+      - [ valve2, position, int, "" ]
+    commands:
+      - [ valve2, set_position, [ 3 ], { } ]
+      - [ purge_and_temper, { rate: '{purgerate}', volume: '{purgevolume}', temperature: '{temperature}' } ]
+      - [ add_component, { rate: '{acetone_purge_rate}', volume: '{acetone_purge_volume}', valve_position: 1 } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ drying, { } ]
+      - [ add_component, { rate: '{hfip_purge_rate}', volume: '{hfip_purge_volume}', valve_position: 2 } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ drying, { } ]
+      - [ add_component, { rate: '{phenol_rate}', volume: '{phenol_volume}', valve_position: 3 } ]
+      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]
+      - [ add_component, { rate: '{base_rate}', volume: '{base_volume}', valve_position: 4 } ]
+      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]
+      - [ valve2, set_position, [ 2 ], { } ]
+      - [ purge, { rate: '{fill_rate}', volume: '{fill_volume}' } ]
+      - [ prerun, { volume: '{prerunvolume}', rate: '{flowrate}', current: '{current}' }]
+      - [ main_continuous_electrolysis, { current: '{current}', amount_of_charge: '{amount_of_charge}', rate: '{flowrate}', voltage_limit: '{voltage_limit}' }]
+      - [ stop, { } ]
+
+  cyclic_flow_electrolysis_biphenol:
+    conditions:
+      
+    stopconditions:
+
+    parameters:
+      purgerate: [float, mL/min]
+      purgevolume: [float, mL]
+      temperature: [float, °C]
+      acetone_purge_rate: [float, mL/min]
+      acetone_purge_volume: [float, mL]
+      reversepurgerate: [float, mL/min]
+      reversepurgevolume: [float, mL]
+      hfip_purge_rate: [float, mL/min]
+      hfip_purge_volume: [float, mL]
+      phenol_rate: [float, mL/min]
+      phenol_volume: [float, mL]
+      hfip_rate: [float, mL/min]
+      half_hfip_volume: [float, mL]
+      base_rate: [float, mL/min]
+      base_volume: [float, mL]
+      fill_loop_rate: [float, mL/min]
+      fill_loop_volume: [float, mL]
+      current: [float, A]
+      amount_of_charge: [float, C]
+      flowrate: [float, mL/min]
+      voltage_limit: [float, V]
+      collection_rate: [float, mL/min]
+      collection_volume: [float, mL]
+    observables:
+      - [ valve2, position, int, "" ]
+    commands:
+      - [ valve2, set_position, [ 3 ], { } ]
+      - [ purge_and_temper, { rate: '{purgerate}', volume: '{purgevolume}', temperature: '{temperature}' } ]
+      - [ add_component, { rate: '{acetone_purge_rate}', volume: '{acetone_purge_volume}', valve_position: 1 } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ add_component, { rate: '{acetone_purge_rate}', volume: '{acetone_purge_volume}', valve_position: 1 } ]
+      - [ valve2, set_position, [ 1 ], { } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
+      - [ valve2, set_position, [ 3 ], { } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ drying, { } ]
+      - [ add_component, { rate: '{hfip_purge_rate}', volume: '{hfip_purge_volume}', valve_position: 2 } ]
+      - [ valve2, set_position, [ 1 ], { } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
+      - [ valve2, set_position, [ 3 ], { } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ drying, { } ]
+      - [ add_component, { rate: '{phenol_rate}', volume: '{phenol_volume}', valve_position: 3 } ]
+      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]
+      - [ add_component, { rate: '{base_rate}', volume: '{base_volume}', valve_position: 4 } ]
+      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]   
+      - [ valve2, set_position, [ 1 ], { } ]
+      - [ purge, { rate: '{fill_loop_rate}', volume: '{fill_loop_volume}' } ]
+      - [ main_cyclic_electrolysis, { current: '{current}', amount_of_charge: '{amount_of_charge}', rate: '{flowrate}', voltage_limit: '{voltage_limit}' } ]
+      - [ stop, { } ]
+      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
+      - [ valve2, set_position, [ 2 ], { } ] 
+      - [ collect_solution, { rate: '{collection_rate}', volume: '{collection_volume}' } ]
+      - [ add_component, { rate: '{hfip_purge_rate}', volume: '{hfip_purge_volume}', valve_position: 2 } ]
+      - [ valve2, set_position, [ 1 ], { } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
+      - [ valve2, set_position, [ 2 ], { } ]
+      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]

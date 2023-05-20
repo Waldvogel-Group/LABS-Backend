@@ -15,8 +15,8 @@ class DeviceFactory:
         try:
             device_module = importlib.import_module(f"backend.drivers.{driver}")
             deferred_device = self.deferred_devices[address]
-        except ModuleNotFoundError:
-            self.log.error("Module for device {devicename} does not exist!", devicename=driver)
+        except ModuleNotFoundError as e:
+            self.log.error("Error while trying to import {devicename}! {error}", devicename=driver, error=e)
             return defer.fail(UnknownDeviceError())
         except KeyError:
             device = device_module.Device(address, **kwargs)

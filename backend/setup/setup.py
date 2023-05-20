@@ -1,4 +1,5 @@
 from collections import ChainMap, defaultdict
+from pathlib import Path
 import time
 import sys
 
@@ -31,7 +32,9 @@ class Setup(IObserver, StateMachineMixIn, BaseObservable):
 
     def __init__(self, config: dict):
         self.config = config
-        initialize_logger(self.config["log_level"], "logs/log.json")
+        logpath = Path("logs/")
+        logpath.mkdir(parents=True, exist_ok=True)
+        initialize_logger(self.config["log_level"], logpath / "log.json")
         self.log = Logger(namespace="Experimental Setup")
         self.conditionhandler = ConditionHandler()
         super().__init__(initial_stateclass=Initializing)

@@ -3,37 +3,37 @@ log_level: info
 
 devices:
   pump1:
-    driver: reglo_icc
+    driver: ismatec_reglo_icc
     address: 127.0.0.1:12347
     channel: 1
   pump2:
-    driver: reglo_icc
+    driver: ismatec_reglo_icc
     address: 127.0.0.1:12347
     channel: 2
   pump3:
-    driver: reglo_icc
+    driver: ismatec_reglo_icc
     address: 127.0.0.1:12347
     channel: 3
   pump4:
-    driver: reglo_icc
+    driver: ismatec_reglo_icc
     address: 127.0.0.1:12347
     channel: 4
   valve1:
-    driver: azura_vu
+    driver: knauer_azura_vu_4_1
     address: 127.0.0.1:12345
     command_parameters:
       retries: 1
       inter_command_time: .5
       on_error: retry
   valve2:
-    driver: azura_vu
+    driver: knauer_azura_vu_4_1
     address: 127.0.0.1:12344
     command_parameters:
       retries: 1
       inter_command_time: .5
       on_error: retry
   fractioncollector:
-   driver: omnicoll
+   driver: lambda_instruments_omnicoll
    address: 127.0.0.2:12349
   psu:
     driver: tdk_lambda_zplus

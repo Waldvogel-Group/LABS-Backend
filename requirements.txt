@@ -1,3 +1,5 @@
 py_expression_eval==0.3.14
 PyYAML==6.0
-Twisted==21.7.0
+Twisted==22.10.0
+pyserial==3.5
+pywin32==306

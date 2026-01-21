@@ -313,6 +313,7 @@ class Device(BaseDevice, MultichannelBaseDevice):
         elif match.group("event_code") == "U":
             log.info("Updated parameters: {parameters}",
                      parameters=match.groupdict())
+            
 
     def dispense(self, rate, volume, **kwargs):
         if float(volume) == 0:

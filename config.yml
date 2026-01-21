@@ -1,337 +1,794 @@
 listen port: 11123
+destination port: 32111
 log_level: info
 
+##### Valve positions #####
+
+## reagent_valve ##
+# 1: MeOH           Compressability: 6
+# 2: MeOH+NH4Cl     Compressability: 6      
+# 3: Nitrobenzene   Compressability: 6
+# 4: DMSO           Compressability: 6
+# 5: SE             Compressability: 6
+# 6: Reference      Compressability: 6
+# 7: Acetonitrile   Compressability: 6
+
+## electrolysis_loop_valve ##
+# 1: reservoir
+# 2: fraction_collector
+# 3: waste
+# 4: NMR
+
+## pump_valve ##
+# 1: electrolysis_pump
+# 2: purge_pump
+
 devices:
-  pump1:
+
+  reagent_dosing_pump:
+    driver: eldex_optos
+    address: COM11
+    command_parameters:
+      retries: 6
+      inter_command_time: 1
+      on_error: retry
+
+  electrolysis_pump:
+    driver: eldex_optos
+    address: COM10
+    command_parameters:
+        retries: 6
+        inter_command_time: 1
+        on_error: retry
+
+  purge_pump:
     driver: ismatec_reglo_icc
-    address: 127.0.0.1:12347
-    channel: 1
-  pump2:
-    driver: ismatec_reglo_icc
-    address: 127.0.0.1:12347
-    channel: 2
-  pump3:
-    driver: ismatec_reglo_icc
-    address: 127.0.0.1:12347
-    channel: 3
-  pump4:
-    driver: ismatec_reglo_icc
-    address: 127.0.0.1:12347
+    address: COM4
     channel: 4
-  valve1:
+
+  reagent_valve:
     driver: knauer_azura_vu_4_1
-    address: 127.0.0.1:12345
-    command_parameters:
-      retries: 1
-      inter_command_time: .5
-      on_error: retry
-  valve2:
+    address: 169.254.220.58:10123
+
+
+  electrolysis_loop_valve:
     driver: knauer_azura_vu_4_1
-    address: 127.0.0.1:12344
-    command_parameters:
-      retries: 1
-      inter_command_time: .5
-      on_error: retry
-  fractioncollector:
-   driver: lambda_instruments_omnicoll
-   address: 127.0.0.2:12349
+    address: 169.254.220.57:10123
+
+  pump_valve:
+    driver: knauer_azura_vu_4_1
+    address: 169.254.220.59:10123
+
   psu:
     driver: tdk_lambda_zplus
-    address: 127.0.0.1:12346
-  thermostat:
-    driver: julabo_presto_a40
-    address: 127.0.0.1:12348
-  airvalve:
-    driver: airvalve
-    address: 127.0.0.1:12350
+    address: COM6
+
+  fractioncollector:
+    driver: omnicoll
+    address: COM7
+
+  nmr:
+    driver: spinsolve_80
+    address: 127.0.0.1:13000
+
+  foxy:
+    driver: foxy_r2
+    address: COM12
+
+#conditions:
+  # Once a condition is True it will stay True inside the experiment.
+  # Reusing conditions is only problematic when nesting experiments.
+  # Strings in arguments and keyword arguments may hold variable parameters that are inserted
+  # during the experiments initialization.
+#  prerun_condition:
+#    [DevicesWaitingCondition, [prerun_condition, [purge_pump]], {}]
 
 experiments:
   # Experimentname:
-  #   conditions:
-  #     name as used in commands: [ type of the condition, [ args ], { kwargs } ]
-  #   stopconditions:
-  #     - [ type of the condition, [ args ], { kwargs } ]
   #   parameters:
-  #     name as used in commands: [ accepted datatype (see below), unit (use '' if no unit) ]
+  #     name as used in commands: [ accepted datatype (see below), unit (use "" if no unit) ]
   #     ...
   #   observables:
   #     - [ device, observable name, datatype (e. g. str or float), unit ]
   #     - ...
   #   commands:
   #     - [ device, function, [ args ], { kwargs } ]
-  #     - [ other_experiment_inside_this_one, { keywordarguments for subexperiment } ]
-  #     - ...  
+  #     - other_experiment_inside_this_one
+  #     - ...
 
-  empty_dosing_tube:
+
+#Test parameter key and dictionary string combination
+
+  foxy_next_fraction:
     conditions:
-
     stopconditions:
-
     parameters:
-
     observables:
-      - [ pump1, remaining_time, int, s ]
-      - [ valve1, position, int, "" ]
     commands:
-      - [ valve1, set_position, [ 6 ], { } ]
-      - [ pump1, dispense, [ ], { rate: '0.1', volume: '0.05' } ]
+      - [foxy, next_fraction, [], {}]
 
-  purge_and_temper:
-    conditions:
-      
-    stopconditions:
-
-    parameters:
-      rate: [float, mL/min]
-      volume: [float, mL]
-      temperature: [float, °C]
-    observables:
-      - [ pump2, remaining_time, int, s ]
-      - [ thermostat, current_temperature, float, °C ]
-    commands:
-      - [ thermostat, set_temperature, [ '{temperature}', 1.5, 30 ], { } ]
-      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
-
-  drying:
-    conditions:
-       drying: [TimeCondition, [drying_interval, 60], {}]
-    stopconditions:
-
-    parameters:
-      
-    observables:
-    
-    commands:
-      - [ airvalve, open, [ ], { } ]
-      - [ airvalve, wait, [ drying ], { } ]
-      - [ airvalve, close, [ ], { } ]
 
   add_component:
     conditions:
-      
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
     stopconditions:
-
     parameters:
+      compressability: [int, ""]
       rate: [float, mL/min]
       volume: [float, mL]
       valve_position: [int, ""]
     observables:
-      - [ pump1, remaining_time, int, s ]
-      - [ valve1, position, int, "" ]
+      - [reagent_dosing_pump, remaining_time, int, s]
+      - [reagent_valve, position, int, ""]
     commands:
-      - [ valve1, set_position, [ '{valve_position}' ], { } ]
-      - [ pump1, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
-      - [ empty_dosing_tube, { } ]
+      - [reagent_dosing_pump, compressability_compensation, [], {compressability: "{compressability}"}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [reagent_valve, set_position, ["{valve_position}"], {}]
+      - [reagent_dosing_pump, dispense, [], { rate: "{rate}", volume: "{volume}"}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
 
-  purge:
+
+  add_component_left:
     conditions:
-      
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
     stopconditions:
-
     parameters:
+      compressability: [int, ""]
       rate: [float, mL/min]
       volume: [float, mL]
     observables:
-      - [ pump2, remaining_time, int, s ]
+      - [pump_valve, position, int, ""]
+      - [electrolysis_pump, remaining_time, int, s]
     commands:
-      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: "{compressability}"}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_pump, dispense, [], { rate: "{rate}", volume: "{volume}"}, ]
+      - [electrolysis_pump, wait, [pump_wait], {}]
 
-  prerun:
+
+  test_add_component_left:
     conditions:
-      dispense_finished_condition: [DevicesWaitingCondition, [wait_for_pump, [pump2]], {}]
-
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
     stopconditions:
-
     parameters:
+      refillratefactor: [int, ""]
+      compressability: [int, ""]
+      rate: [float, mL/min]
       volume: [float, mL]
-      rate: [float, mL/min]
-      current: [float, A]
     observables:
-      - [ psu, current, float, A ]
-      - [ psu, voltage, float, V ]
-      - [ psu, amount_of_charge, float, C ]
-      - [ pump2, remaining_time, int, s ]
+      - [pump_valve, position, int, ""]
+      - [electrolysis_pump, remaining_time, int, s]
     commands:
-      - [ psu, output_constant_current, [ '{current}' ], { } ]
-      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
-      - [ psu, busy, [ dispense_finished_condition ] , { } ]
-      - [ pump2, wait, [ dispense_finished_condition ] , { } ]
+      - [electrolysis_pump, set_refill_rate_factor, [], {refillratefactor: "{refillratefactor}"}]
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: "{compressability}"}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [electrolysis_pump, dispense, [], { rate: "{rate}", volume: "{volume}"}, ]
+      - [electrolysis_pump, set_refill_rate_factor, [], {refillratefactor: 4}]
+      - [electrolysis_pump, wait, [pump_wait], {}]
 
-  main_continuous_electrolysis:
+
+  # prime_all_reagents:
+  #   conditions:
+  #   stopconditions:
+  #   parameters:
+  #   observables:
+  #   commands:
+  #     - [ add_component, { rate: "2.0", volume: "1.0", valve_position: 1 } ]
+  #     - [ add_component, { rate: "2.0", volume: "1.0", valve_position: 2 } ]
+  #     - [ add_component, { rate: "2.0", volume: "1.0", valve_position: 3 } ]
+
+
+  prime_flowcell:
     conditions:
-      
+      prime_wait: [TimeCondition, [prime_wait, 1], {}]
     stopconditions:
-      - [ObservableGreaterOrEqualValueCondition, [max_voltage, psu, voltage, "{voltage_limit}"], {}]
     parameters:
-      current: [float, A]
-      amount_of_charge: [float, C]
-      rate: [float, mL/min]
-      voltage_limit: [float, V]
     observables:
-      - [ psu, current, float, A ]
-      - [ psu, voltage, float, V ]
-      - [ psu, amount_of_charge, float, C ]
+      - [electrolysis_pump, remaining_time, int, s]
     commands:
-      - [ fractioncollector, next_fraction, [ ], { } ]
-      - [ pump2, continuous_flow, [ ], { rate: '{rate}' } ]
-      - [ psu, output_constant_current, [ ], { amount_of_charge: '{amount_of_charge}', current: '{current}' } ]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: 6}]
+      - [reagent_dosing_pump, wait, [prime_wait], {}]
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [electrolysis_pump, dispense, [], { rate: "3.0", volume: "4.0"}, ]
+      - [electrolysis_pump, wait, [prime_wait], {}]
 
-  stop:
+  empty_valve_reservoir_tube:
     conditions:
-      
     stopconditions:
-
     parameters:
-
     observables:
-
+      - [purge_pump, remaining_time, int, s]
     commands:
-      - [ pump2, stop_pumping, [ ] , { } ]
-      - [ thermostat, stop_tempering, [ ], { } ]
-      - [ fractioncollector, next_fraction, [ ], { } ]
-  
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [purge_pump, dispense, [], { rate: "15.0", volume: "10.0" }]
+
+  empty_reservoir_filling_tube:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [purge_pump, remaining_time, int, s]
+    commands:
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [purge_pump, dispense, [], { rate: "15.0", volume: "20.0" }]
+
+
+  empty_nmr_cell:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [purge_pump, remaining_time, int, s]
+    commands:
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [4], {}]
+      - [purge_pump, dispense, [], { rate: "15.0", volume: "25.0" }]
+
+
   collect_solution:
     conditions:
-      
     stopconditions:
-
     parameters:
-      rate: [float, mL/min]
-      volume: [float, mL]
     observables:
-      - [ pump2, remaining_time, int, s ]
+      - [purge_pump, remaining_time, int, s]
     commands:
-      - [ pump2, dispense, [ ], { rate: '{rate}', volume: '{volume}' } ]
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [2], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "55.0" }]
+
+
+  fill_nmr_cell:
+    conditions:
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_pump, remaining_time, int, s]
+    commands:
+      - [electrolysis_pump, compressability_compensation, [], {compressability: 6}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_loop_valve, set_position, [4], {}]
+      - [electrolysis_pump, dispense, [], { rate: "3.0", volume: "12.0"}, ]
 
   main_cyclic_electrolysis:
     conditions:
-      
+      electrolysis_wait_condition: [TimeCondition, [electrolysis_wait_condition, 1], {}]
     stopconditions:
-      - [ObservableGreaterOrEqualValueCondition, [max_voltage, psu, voltage, "{voltage_limit}"], {}]
     parameters:
       current: [float, A]
       amount_of_charge: [float, C]
       rate: [float, mL/min]
-      voltage_limit: [float, V]
     observables:
-      - [ psu, current, float, A ]
-      - [ psu, voltage, float, V ]
-      - [ psu, amount_of_charge, float, C ]
+      - [psu, current, float, A]
+      - [psu, voltage, float, V]
+      - [psu, amount of charge, float, C]
     commands:
-      - [ pump2, continuous_flow, [ ], { rate: '{rate}' } ]
-      - [ psu, output_constant_current, [ ], { amount_of_charge: '{amount_of_charge}', current: '{current}' } ]
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_pump, wait, [electrolysis_wait_condition], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: 6}]
+      - [reagent_dosing_pump, wait, [electrolysis_wait_condition], {}]
+      - [electrolysis_pump, continuous_flow, [], { rate: "{rate}"}]
+      - [psu, output_constant_current, [], { amount_of_charge: "{amount_of_charge}", current: "{current}" }, ]
 
-  continuous_flow_electrolysis_biphenol:
+
+  purge_reservoir_and_temper:
     conditions:
-      
     stopconditions:
-
     parameters:
-      purgerate: [float, mL/min]
-      purgevolume: [float, mL]
-      temperature: [float, °C]
-      acetone_purge_rate: [float, mL/min]
-      acetone_purge_volume: [float, mL]
-      hfip_purge_rate: [float, mL/min]
-      hfip_purge_volume: [float, mL]
-      phenol_rate: [float, mL/min]
-      phenol_volume: [float, mL]
-      hfip_rate: [float, mL/min]
-      half_hfip_volume: [float, mL]
-      base_rate: [float, mL/min]
-      base_volume: [float, mL]
-      fill_rate: [float, mL/min]
-      fill_volume: [float, mL]
-      prerunvolume: [float, mL]
-      flowrate: [float, mL/min]
-      current: [float, mA]
-      amount_of_charge: [float, C]
-      voltage_limit: [float, V]
+    #  temperature: [float, °C]
     observables:
-      - [ valve2, position, int, "" ]
+      - [electrolysis_pump, remaining_time, int, s]
+    #  - [thermostat, current_temperature, float, °C]
     commands:
-      - [ valve2, set_position, [ 3 ], { } ]
-      - [ purge_and_temper, { rate: '{purgerate}', volume: '{purgevolume}', temperature: '{temperature}' } ]
-      - [ add_component, { rate: '{acetone_purge_rate}', volume: '{acetone_purge_volume}', valve_position: 1 } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ drying, { } ]
-      - [ add_component, { rate: '{hfip_purge_rate}', volume: '{hfip_purge_volume}', valve_position: 2 } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ drying, { } ]
-      - [ add_component, { rate: '{phenol_rate}', volume: '{phenol_volume}', valve_position: 3 } ]
-      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]
-      - [ add_component, { rate: '{base_rate}', volume: '{base_volume}', valve_position: 4 } ]
-      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]
-      - [ valve2, set_position, [ 2 ], { } ]
-      - [ purge, { rate: '{fill_rate}', volume: '{fill_volume}' } ]
-      - [ prerun, { volume: '{prerunvolume}', rate: '{flowrate}', current: '{current}' }]
-      - [ main_continuous_electrolysis, { current: '{current}', amount_of_charge: '{amount_of_charge}', rate: '{flowrate}', voltage_limit: '{voltage_limit}' }]
-      - [ stop, { } ]
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [3], {}]
+    #  - [thermostat, set_temperature, ["{temperature}", 1.5, 30], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "10.0" }]
 
-  cyclic_flow_electrolysis_biphenol:
+
+  next_fraction:
     conditions:
-      
     stopconditions:
-
     parameters:
-      purgerate: [float, mL/min]
-      purgevolume: [float, mL]
-      temperature: [float, °C]
-      acetone_purge_rate: [float, mL/min]
-      acetone_purge_volume: [float, mL]
-      reversepurgerate: [float, mL/min]
-      reversepurgevolume: [float, mL]
-      hfip_purge_rate: [float, mL/min]
-      hfip_purge_volume: [float, mL]
-      phenol_rate: [float, mL/min]
-      phenol_volume: [float, mL]
-      hfip_rate: [float, mL/min]
-      half_hfip_volume: [float, mL]
-      base_rate: [float, mL/min]
-      base_volume: [float, mL]
-      fill_loop_rate: [float, mL/min]
-      fill_loop_volume: [float, mL]
+    observables:
+    commands:
+      - [fractioncollector, next_fraction, [], {}]
+
+
+  electrolysis_pump_solvent_flushing:
+    conditions:
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_loop_valve, position, int, ""]
+      - [electrolysis_pump, remaining_time, int, s]
+    commands:
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: 6}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [electrolysis_pump, dispense, [], { rate: "3.0", volume: "5.0"}, ]
+      - [electrolysis_pump, wait, [pump_wait], {}]
+
+
+  solvent_flushing_nmr_cell:
+    conditions:
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_loop_valve, position, int, ""]
+      - [electrolysis_pump, remaining_time, int, s]
+    commands:
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_loop_valve, set_position, [4], {}]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: 6}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [electrolysis_pump, dispense, [], { rate: "3.0", volume: "6.0"}, ]
+      - [electrolysis_pump, wait, [pump_wait], {}]
+
+
+  solvent_flushing_collect:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+    #  - [reagent_dosing_pump, remaining_time, int, s]
+    #  - [reagent_valve, position, int, ""]
+    #  - [electrolysis_pump, remaining_time, int, s]
+      - [electrolysis_loop_valve, position, int, ""]
+    commands:
+      - [add_component, { rate: "3.0", volume: "6.0", valve_position: 7, compressability: 6 }]
+      - [solvent_flushing_nmr_cell, {}]
+      - [empty_nmr_cell, {}]
+      - [electrolysis_pump_solvent_flushing, {}]
+      - [empty_reservoir_filling_tube, {}]
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [3], {}]
+      - [purge_pump, dispense, [], { rate: "-12.0", volume: "36.0" }]
+
+
+  cleaning:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_loop_valve, position, int, ""]
+    commands:
+      - [add_component, { rate: "4.0", volume: "20.0", valve_position: 1, compressability: 6 }]
+      - [electrolysis_loop_valve, set_position, [4], {}]
+      - [add_component_left, { rate: "4.0", volume: "10.0", compressability: 6 }]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [add_component_left, { rate: "3.0", volume: "3.0", compressability: 6 }]
+      - [empty_valve_reservoir_tube, {}]
+      - [empty_nmr_cell, {}]      
+    #  - [electrolysis_pump_solvent_flushing, {}]
+    #  - [empty_reservoir_filling_tube, {}]
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [3], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "60.0" }]
+
+  flushing_back_to_solvent:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_loop_valve, position, int, ""]
+    commands:
+      - [add_component, { rate: "3.0", volume: "10.0", valve_position: 1, compressability: 6 }]
+      - [electrolysis_loop_valve, set_position, [4], {}]
+      - [add_component_left, { rate: "3.0", volume: "6.0", compressability: 6 }]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [add_component_left, { rate: "3.0", volume: "3.0", compressability: 6 }]
+      - [empty_valve_reservoir_tube, {}]       
+     # - [electrolysis_pump_solvent_flushing, {}]
+      - [empty_nmr_cell, {}] 
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [3], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "50.0" }]
+
+  shim_on_solvent:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [nmr, time_remaining, int, ""]
+    commands:
+      - [nmr, shim_on_solvent, [], {}]
+
+  powershim_on_solvent:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [nmr, time_remaining, int, ""]
+    commands:
+      - [nmr, powershim_on_solvent, [], {}]
+
+  fluorine_nmr:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [nmr, time_remaining, int, ""]
+    commands:
+      - [nmr, f19hdec_measurement, [], {}]
+
+  nmr_wait:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [nmr, time_remaining, int, ""]
+    commands:
+      - [nmr, nmr_wait_function, [], {}]
+
+ # ### Electrolysis Priming and Collecting Methods ###
+
+  stop:
+    conditions:
+      #stop_wait_condition: [TimeCondition, [stop_wait_condition, 2], {}]
+    stopconditions:
+    parameters:
+    observables:
+    commands:
+      - [electrolysis_pump, stop_pumping, [], {}]
+    #  - [thermostat, stop_tempering, [], {}]
+
+
+  cyclic_flow_electrolysis:
+    conditions:
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
+    stopconditions:
+    parameters:
       current: [float, A]
       amount_of_charge: [float, C]
-      flowrate: [float, mL/min]
-      voltage_limit: [float, V]
-      collection_rate: [float, mL/min]
-      collection_volume: [float, mL]
+      eleflowrate: [float, mL/min]
+      nitrovolume: [float, ml]
+      dmsovolume: [float, ml]
+      sevolume: [float, ml]
+      methanolvolume: [float, ml]
+
     observables:
-      - [ valve2, position, int, "" ]
+      - [electrolysis_loop_valve, position, int, ""]
+      - [nmr, time_remaining, int, ""]
     commands:
-      - [ valve2, set_position, [ 3 ], { } ]
-      - [ purge_and_temper, { rate: '{purgerate}', volume: '{purgevolume}', temperature: '{temperature}' } ]
-      - [ add_component, { rate: '{acetone_purge_rate}', volume: '{acetone_purge_volume}', valve_position: 1 } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ add_component, { rate: '{acetone_purge_rate}', volume: '{acetone_purge_volume}', valve_position: 1 } ]
-      - [ valve2, set_position, [ 1 ], { } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
-      - [ valve2, set_position, [ 3 ], { } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ drying, { } ]
-      - [ add_component, { rate: '{hfip_purge_rate}', volume: '{hfip_purge_volume}', valve_position: 2 } ]
-      - [ valve2, set_position, [ 1 ], { } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
-      - [ valve2, set_position, [ 3 ], { } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ drying, { } ]
-      - [ add_component, { rate: '{phenol_rate}', volume: '{phenol_volume}', valve_position: 3 } ]
-      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]
-      - [ add_component, { rate: '{base_rate}', volume: '{base_volume}', valve_position: 4 } ]
-      - [ add_component, { rate: '{hfip_rate}', volume: '{half_hfip_volume}', valve_position: 2 } ]   
-      - [ valve2, set_position, [ 1 ], { } ]
-      - [ purge, { rate: '{fill_loop_rate}', volume: '{fill_loop_volume}' } ]
-      - [ main_cyclic_electrolysis, { current: '{current}', amount_of_charge: '{amount_of_charge}', rate: '{flowrate}', voltage_limit: '{voltage_limit}' } ]
-      - [ stop, { } ]
-      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
-      - [ valve2, set_position, [ 2 ], { } ] 
-      - [ collect_solution, { rate: '{collection_rate}', volume: '{collection_volume}' } ]
-      - [ add_component, { rate: '{hfip_purge_rate}', volume: '{hfip_purge_volume}', valve_position: 2 } ]
-      - [ valve2, set_position, [ 1 ], { } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
-      - [ purge, { rate: '-{reversepurgerate}', volume: '{reversepurgevolume}' } ]
-      - [ valve2, set_position, [ 2 ], { } ]
-      - [ purge, { rate: '{purgerate}', volume: '{purgevolume}' } ]
+
+    # First step: Empty the reservoir, set the electrolysis loop to waste.
+      - [purge_reservoir_and_temper, {}]
+
+    # Second step: Dose the reagents into the reservoir.
+      - [add_component, { rate: "2.0", volume: "{dmsovolume}", valve_position: 4 , compressability: 6}] 
+      - [add_component, { rate: "2.0", volume: "{nitrovolume}", valve_position: 3 , compressability: 6}]
+      - [add_component, { rate: "2.0", volume: "{sevolume}", valve_position: 5 , compressability: 6}] 
+      - [add_component, { rate: "2.0", volume: "{methanolvolume}", valve_position: 2 , compressability: 6}]
+
+    # Third step: Fill the loop with the reagents
+      - [prime_flowcell, {}]
+    #  - [electrolysis_pump, wait, [pump_wait], {}]
+
+    # Fourth step: Electrolysis
+      - [fractioncollector, next_fraction, [], {}]
+      - [electrolysis_pump, set_refill_rate_factor, [], {refillratefactor: 2}]
+      - [main_cyclic_electrolysis, {rate: "{eleflowrate}", amount_of_charge: "{amount_of_charge}", current: "{current}" }]
+      - [stop, {}]
+      - [electrolysis_pump, set_refill_rate_factor, [], {refillratefactor: 4}]
+      - [electrolysis_pump, wait, [pump_wait], {}]   
+
+    # Fifth step: stirring and NMR measurement 
+      - [add_component_left, { rate: "2.0", volume: "40.0", compressability: 6 }]  
+      - [add_component, { rate: "2.0", volume: "1.0", valve_position: 6, compressability: 6}]
+      - [add_component, { rate: "2.0", volume: "0.5", valve_position: 1, compressability: 6}]
+    #  - [add_component_left, { rate: "2.0", volume: "5.0", compressability: 6 }]    
+      - [empty_reservoir_filling_tube, {}]
+      - [fill_nmr_cell, {}]
+      - [nmr_wait, {}]
+      - [shim_on_solvent, {}]
+      - [fluorine_nmr, {}]
+
+    # Sixth step: Collect the solution into the fraction collector
+      - [empty_nmr_cell, {}]
+      - [collect_solution, {}]
+      - [solvent_flushing_collect, {}]
+
+    # # Seventh step: cleaning the system and flushing it back to the main solvent
+      - [cleaning, {}]
+      - [flushing_back_to_solvent, {}]
+    #  - [flushing_back_to_solvent, {}]
+
+  shim_nmr:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [nmr, time_remaining, int, ""]
+    commands:
+      - [nmr, start_shimming, [], {}]
+
+
+
+  quickscan_nmr:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [nmr, time_remaining, int, ""]
+    commands:
+      - [nmr, h1_measurement, [], {}]
+
+
+### Big flow cell routines ###
+
+  large_cell_prime_flowcell:
+    conditions:
+      prime_wait: [TimeCondition, [pump_wait, 1], {}]
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_pump, remaining_time, int, s]
+    commands:
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [electrolysis_pump, compressability_compensation, [], {compressability: 6}]
+      - [reagent_dosing_pump, wait, [prime_wait], {}]
+      - [electrolysis_pump, dispense, [], { rate: "4.0", volume: "6.0"}, ]
+      - [electrolysis_pump, wait, [prime_wait], {}]
+
+
+  large_cell_main_cyclic_electrolysis:
+    conditions:
+      electrolysis_wait_condition: [TimeCondition, [electrolysis_wait_condition, 1], {}]
+    stopconditions:
+    parameters:
+      current: [float, A]
+      amount_of_charge: [float, C]
+      rate: [float, mL/min]
+    observables:
+      - [psu, current, float, A]
+      - [psu, voltage, float, V]
+      - [psu, amount of charge, float, C]
+    commands:
+      - [pump_valve, set_position, [1], {}]
+      - [electrolysis_pump, wait, [electrolysis_wait_condition], {}]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [electrolysis_pump, continuous_flow_with_compressability, [], { rate: "{rate}", compressability: 9}]
+      - [psu, output_constant_current, [], { amount_of_charge: "{amount_of_charge}", current: "{current}" }, ]
+
+
+  large_cell_collect_solution:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [purge_pump, remaining_time, int, s]
+    commands:
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [2], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "320.0" }]
+
+
+  large_cell_solvent_flushing_collect:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+    #  - [reagent_dosing_pump, remaining_time, int, s]
+    #  - [reagent_valve, position, int, ""]
+    #  - [electrolysis_pump, remaining_time, int, s]
+      - [electrolysis_loop_valve, position, int, ""]
+    commands:
+      - [add_component, { rate: "3.0", volume: "10.0", valve_position: 7, compressability: 6 }]
+      - [solvent_flushing_nmr_cell, {}]
+      - [empty_nmr_cell, {}]
+      - [electrolysis_pump_solvent_flushing, {}]
+      - [empty_reservoir_filling_tube, {}]
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [3], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "50.0" }]
+
+
+  large_cell_cleaning:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+      - [electrolysis_loop_valve, position, int, ""]
+    commands:
+      - [add_component, { rate: "4.0", volume: "50.0", valve_position: 1, compressability: 6 }]
+      - [electrolysis_loop_valve, set_position, [4], {}]
+      - [add_component_left, { rate: "4.0", volume: "12.0", compressability: 6 }]
+      - [electrolysis_loop_valve, set_position, [1], {}]
+      - [add_component_left, { rate: "3.0", volume: "6.0", compressability: 6 }]
+      - [empty_valve_reservoir_tube, {}]
+      - [empty_nmr_cell, {}]      
+    #  - [electrolysis_pump_solvent_flushing, {}]
+    #  - [empty_reservoir_filling_tube, {}]
+      - [pump_valve, set_position, [2], {}]
+      - [electrolysis_loop_valve, set_position, [3], {}]
+      - [purge_pump, dispense, [], { rate: "-15.0", volume: "100.0" }]
+
+
+
+  large_cell_cyclic_flow_electrolysis:
+    conditions:
+      pump_wait: [TimeCondition, [pump_wait, 1], {}]
+    stopconditions:
+    parameters:
+      current: [float, A]
+      amount_of_charge: [float, C]
+      eleflowrate: [float, mL/min]
+      nitrovolume: [float, ml]
+      dmsovolume: [float, ml]
+      sevolume: [float, ml]
+      methanolvolume: [float, ml]
+
+    observables:
+      - [electrolysis_loop_valve, position, int, ""]
+      - [nmr, time_remaining, int, ""]
+    commands:
+
+    # First step: Empty the reservoir, set the electrolysis loop to waste.
+    #   - [purge_reservoir_and_temper, {}]
+
+    # # Second step: Dose the reagents into the reservoir.
+    #   - [add_component, { rate: "2.0", volume: "{dmsovolume}", valve_position: 4 , compressability: 6}] 
+    #   - [add_component, { rate: "2.0", volume: "{nitrovolume}", valve_position: 3 , compressability: 6}]
+    #   - [add_component, { rate: "2.0", volume: "{sevolume}", valve_position: 5 , compressability: 6}] 
+    #   - [add_component, { rate: "2.0", volume: "{methanolvolume}", valve_position: 2 , compressability: 6}]
+
+    # Third step: Fill the loop with the reagents
+      # - [large_cell_prime_flowcell, {}]
+      # - [electrolysis_pump, wait, [pump_wait], {}]
+
+    # Fourth step: Electrolysis
+      # - [fractioncollector, next_fraction, [], {}]
+      - [electrolysis_pump, set_refill_rate_factor, [], {refillratefactor: 2}]
+      - [reagent_dosing_pump, wait, [pump_wait], {}]
+      - [large_cell_main_cyclic_electrolysis, {rate: "{eleflowrate}", amount_of_charge: "{amount_of_charge}", current: "{current}" }]
+      - [stop, {}]
+      - [electrolysis_pump, set_refill_rate_factor, [], {refillratefactor: 4}]
+      - [electrolysis_pump, wait, [pump_wait], {}]   
+
+    # Fifth step: stirring and NMR measurement 
+      - [add_component_left, { rate: "4.0", volume: "720.0", compressability: 6 }]  
+      # - [add_component, { rate: "2.0", volume: "20.0", valve_position: 6, compressability: 6}]
+      # - [add_component, { rate: "2.0", volume: "1.0", valve_position: 1, compressability: 6}]
+    #  - [add_component_left, { rate: "2.0", volume: "5.0", compressability: 6 }]    
+      - [empty_reservoir_filling_tube, {}]
+      # - [fill_nmr_cell, {}]
+      # - [nmr_wait, {}]
+      # - [shim_on_solvent, {}]
+      # - [fluorine_nmr, {}]
+
+    # Sixth step: Collect the solution into the fraction collector
+      # - [empty_nmr_cell, {}]
+      - [large_cell_collect_solution, {}]
+      - [large_cell_solvent_flushing_collect, {}]
+
+    # # Seventh step: cleaning the system and flushing it back to the main solvent
+      - [large_cell_cleaning, {}]
+      - [flushing_back_to_solvent, {}]
+
+
+
+
+
+
+  # test_prep_elec:
+  #   conditions:
+  #   stopconditions:
+  #   parameters:
+  #     current: [float, A]
+  #     amount_of_charge: [float, C]
+  #     eleflowrate: [float, mL/min]
+  #   observables:
+  #     - [electrolysis_loop_valve, position, int, ""]
+  #   commands:
+  #     - [main_cyclic_electrolysis, {rate: "{eleflowrate}", amount_of_charge: "{amount_of_charge}", current: "{current}" }]
+  #     - [stop, {}]
+  #     - [empty_reservoir_filling_tube, {}]
+
+
+  # nmr_ref_added:
+  #   conditions:
+  #   stopconditions:
+  #   parameters:
+  #   observables:
+  #   commands:
+  #     - [fill_nmr_cell, {}]
+  #     - [fluorine_nmr, {}] 
+  #     - [empty_reservoir_filling_tube, {}]    
+  #     - [collect_solution, {}]
+  #     - [solvent_flushing_collect, {}]
+
+  #   # Sixth step: cleaning the system and flushing it back to the main solvent
+  #     - [cleaning, {}]
+  #     - [flushing_back_to_solvent, {}]
+
+
+
+
+
+### Fraction collector section ###
+
+  fc_test_1:
+    conditions:
+    stopconditions:
+    parameters:
+    observables:
+    commands:
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+      - [fractioncollector, next_fraction, [], {}]
+
+
+### Singe pass electrolyses###
+
+  # prerun:
+  #   parameters:
+  #     prerun_volume: [float, mL]
+  #     prerun_rate: [float, mL/min]
+  #     prerun_current: [float, A]
+  #   observables:
+  #     - [psu, current, float, A]
+  #     - [psu, voltage, float, V]
+  #     - [psu, amount of charge, float, C]
+  #     - [electrolysis_pump, remaining_time, int, s]
+  #   commands:
+  #     - [psu, output_constant_current, ["{prerun_current}"], {}]
+  #     - [
+  #         electrolysis_pump,
+  #         dispense,
+  #         [],
+  #         { rate: "{prerun_rate}", volume: "{prerun_volume}" },
+  #       ]
+  #     - [psu, busy, [prerun_condition], {}]
+  #     - [electrolysis_pump, wait, [prerun_condition], {}]
+
+  # main_continuous_electrolysis:
+  #   parameters:
+  #     current: [float, A]
+  #     amount_of_charge: [float, C]
+  #     flowrate: [float, mL/min]
+  #   observables:
+  #     - [psu, current, float, A]
+  #     - [psu, voltage, float, V]
+  #     - [psu, amount of charge, float, C]
+  #   commands:
+  #     - [fractioncollector, next_fraction, [], {}]
+  #     - [electrolysis_pump, continuous_flow, [], { rate: "{flowrate}" }]
+  #     - [
+  #         psu,
+  #         output_constant_current,
+  #         [],
+  #         { amount_of_charge: "{amount_of_charge}", current: "{current}" },
+  #       ]
+
+### Add components with compressability compensation factor ###
+
+# water/ethanol solutions : 6 for 2 mL/min
